@@ -1,0 +1,119 @@
+import sqlite3
+import requests
+from bs4 import BeautifulSoup
+
+
+# клас для роботи з базою даних
+class Database:
+    def __init__(self):
+        # створення бази даних
+        self.conn = sqlite3.connect("sites.db")
+
+        # створення таблиці сайтів
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS Sites (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT,
+                url TEXT
+            )
+        """)
+
+    # додаємо сайт у базу даних
+    def add_site(self, title, url):
+        self.conn.execute(
+            "INSERT INTO Sites (title, url) VALUES (?, ?)",
+            (title, url)
+        )
+        self.conn.commit()
+
+    # шукаємо сайти за назвою
+    def search(self, text):
+        cursor = self.conn.execute(
+            "SELECT title, url FROM Sites WHERE title LIKE ?",
+            ("%" + text + "%",)
+        )
+        return cursor.fetchall()
+
+
+# клас для парсингу сайтів
+class SiteParser:
+    def parse(self, url):
+        try:
+            # завантажуємо сторінку
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+
+            # отримання назви сайту
+            soup = BeautifulSoup(response.text, "html.parser")
+            title = soup.title.string if soup.title else url
+
+            return title.strip(), url
+
+        except requests.RequestException:
+            # повідомляємо про помилку
+            print("помилка завантаження сайту")
+            return None
+
+
+# клас інтерфейсу користувача
+class UserInterface:
+    def __init__(self, database, parser):
+        #з зберігаємо об'єкти
+        self.database = database
+        self.parser = parser
+
+    # запуск меню
+    def start(self):
+        while True:
+            print("\n1. додати сайт")
+            print("2. пошук сайтів")
+            print("3. вихід")
+
+            choice = input("ваш вибір: ")
+
+            if choice == "1":
+                # додати новий сайт
+                url = input("Введіть URL сайту: ")
+                result = self.parser.parse(url)
+
+                if result:
+                    self.database.add_site(*result)
+                    print("сайт додано до бази даних та збережено")
+
+            elif choice == "2":
+                # шукаємо сайт у базі
+                text = input("введіть назву для пошуку: ")
+                results = self.database.search(text)
+
+                for title, url in results:
+                    print(title, "-", url)
+
+                if not results:
+                    print("нічого не знайдено")
+
+            elif choice == "3":
+                # завершуємо програму
+                break
+
+
+# функція запуску програми
+def run():
+    database = Database()
+    parser = SiteParser()
+    interface = UserInterface(database, parser)
+
+    # запускаємо інтерфейс
+    interface.start()
+
+
+# запускаємо програму
+if __name__ == "__main__": 
+    run()
+
+# Реалізація атрибутів і методів
+# - Database — створює базу даних, зберігає сайти та шукає їх.
+# - SiteParser — завантажує сторінку та отримує її назву.
+# - UserInterface — показує меню та приймає команди користувача.
+# - run() — створює об'єкти та забезпечує їхню взаємодію.
+# перед запуском встановіть бібліотеки:
+# pip install requests beautifulsoup4
